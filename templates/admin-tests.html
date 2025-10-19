@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <title>Admin • Testes</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body id="page-admin-tests">
+    
+    <aside class="sidebar">
+        <div class="brand-wrap">
+            <img src="{{ url_for('static', filename='logoge.png') }}" alt="GE" class="brand-logo">
+            <div class="brand">Test Manager SAP</div>
+        </div>
+        <nav>
+            <a href="/admin">Hub</a>
+            <a class="active" href="/admin/tests">Testes</a>
+            <a href="/admin/users">Testadores</a>
+            <a href="/admin/metrics">Métricas</a>
+        </nav>
+    </aside>
+
+    <div class="main-content">
+        
+        <header class="top-header">
+            <nav class="top-actions">
+                <span>Administrador</span>
+                <button id="btnLogout" class="btn danger">Sair</button>
+            </nav>
+        </header>
+
+        <main class="container grid">
+            <section class="card">
+                <h2 class="section-title">Criar/Editar teste</h2>
+
+                <div class="form-grid">
+                    <div>
+                        <label>Sistema</label>
+                        <select id="t_system"></select>
+                    </div>
+                    <div>
+                        <label>Módulo/Área</label>
+                        <select id="t_module">
+                            <option value="">Selecione um Módulo</option>
+                            <option value="CORE">CORE (Geral/Login)</option>
+                        </select>
+                    </div>
+                    <div style="grid-column:1/-1">
+                        <label>Nome do Conjunto de Testes</label>
+                        <input type="text" id="t_name" placeholder="ex.: Ciclo de Vendas Q3" required />
+                    </div>
+                    <div style="grid-column:1/-1">
+                        <label>Descrição do Conjunto</label>
+                        <textarea id="t_desc" rows="3" placeholder="Objetivo do conjunto de testes (opcional)."></textarea>
+                    </div>
+                </div>
+
+                <h3 style="margin-top:20px;border-left:2px solid var(--light-blue);padding-left:8px;">Testes Disponíveis</h3>
+                <p class="hint">Selecione o Módulo acima para carregar os testes base.</p>
+                <div id="testTemplatesContainer" class="form-grid" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 10px;">
+                </div>
+
+                <div class="row">
+                    <button id="btnCreateTest" class="btn primary">Salvar (novo)</button>
+                    <button id="btnUpdateTest" class="btn" disabled>Atualizar selecionado</button>
+                    <button id="btnDeleteTest" class="btn danger" disabled>Excluir selecionado</button>
+                    <button id="btnToggleTest" class="btn" disabled>Ativar/Desativar</button>
+                </div>
+                <p class="hint">Selecione um item na lista à direita para editar, excluir ou ativar/desativar.</p>
+            </section>
+
+            <section class="card">
+                <h2 class="section-title">Prioridade de execução (arraste e solte)</h2>
+                <div id="testsList" class="table-wrap"></div>
+                <div class="row">
+                    <button id="btnSaveOrder" class="btn success" disabled>Salvar ordem</button>
+                </div>
+                <p class="hint">Arraste as linhas para reordenar. A primeira linha tem maior prioridade.</p>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

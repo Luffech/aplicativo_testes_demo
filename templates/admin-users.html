@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin • Testadores</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body id="page-admin-users">
+  
+  <aside class="sidebar">
+    <div class="brand-wrap">
+      <img src="{{ url_for('static', filename='logoge.png') }}" alt="GE" class="brand-logo">
+      <div class="brand">Test Manager SAP</div>
+    </div>
+    <nav>
+      <a href="/admin">Hub</a>
+      <a href="/admin/tests">Testes</a>
+      <a class="active" href="/admin/users">Testadores</a>
+      <a href="/admin/metrics">Métricas</a>
+    </nav>
+  </aside>
+
+  <div class="main-content">
+    
+    <header class="top-header">
+      <nav class="top-actions">
+        <span>Administrador</span>
+        <button id="btnLogout" class="btn danger">Sair</button>
+      </nav>
+    </header>
+
+    <main class="container grid">
+      <section class="card">
+        <h2 class="section-title">Gerenciar testadores</h2>
+
+        <div class="form-grid">
+          <div>
+            <label>Novo username</label>
+            <input type="text" id="u_new" placeholder="ex.: joaotester" />
+          </div>
+        </div>
+        <div class="row">
+          <button id="btnAddUser" class="btn primary">Adicionar</button>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eef2f7;margin:16px 0" />
+
+        <div class="form-grid">
+          <div>
+            <label>Editar username (selecionado)</label>
+            <input type="text" id="u_edit" placeholder="novo username" />
+          </div>
+        </div>
+        <div class="row">
+          <button id="btnUpdateUser" class="btn" disabled>Salvar alteração</button>
+          <button id="btnToggleUser" class="btn" disabled>Ativar/Desativar</button>
+          <button id="btnDeleteUser" class="btn danger" disabled>Excluir</button>
+        </div>
+        <p class="hint">Selecione um testador na tabela para editar, ativar/desativar ou excluir.</p>
+      </section>
+
+      <section class="card">
+        <h2 class="section-title">Lista de testadores</h2>
+        <div id="usersList" class="table-wrap"></div>
+
+        <h2 class="section-title" style="margin-top:20px">Logs de login</h2>
+        <div id="userLogs" class="table-wrap"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

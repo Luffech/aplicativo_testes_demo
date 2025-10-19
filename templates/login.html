@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login • Test Manager SAP (DEMO)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body id="page-login">
+  <header class="topbar">
+    <div class="brand-wrap">
+      <img src="{{ url_for('static', filename='logoge.png') }}" alt="GE" class="brand-logo">
+      <div class="brand">Test Manager SAP</div>
+    </div>
+  </header>
+
+  <main class="container narrow">
+    <section class="card">
+      <h1 class="section-title">Acessar</h1>
+      <p class="muted">Use as credenciais de demonstração para entrar.</p>
+
+      <div class="info-block">
+        <div><strong>Admin:</strong> <code>adm123</code> / <code>adm123</code></div>
+        <div><strong>Testador:</strong> <code>usertest</code> / <code>adm123</code></div>
+      </div>
+
+      <form id="loginForm" class="form-grid">
+        <div>
+          <label>Usuário</label>
+          <input type="text" id="username" placeholder="ex.: adm123" required />
+        </div>
+        <div>
+          <label>Senha</label>
+          <input type="password" id="password" placeholder="ex.: adm123" required />
+        </div>
+        
+        <div class="actions">
+          <button type="submit" class="btn primary">Entrar</button>
+        </div>
+      </form>
+
+      <p class="footnote">Identidade visual baseada em GE Aerospace • Demo sem persistência</p>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

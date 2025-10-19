@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin • Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body id="page-admin-hub">
+  
+  <aside class="sidebar">
+    <div class="brand-wrap">
+      <img src="{{ url_for('static', filename='logoge.png') }}" alt="GE" class="brand-logo">
+      <div class="brand">Test Manager SAP</div>
+    </div>
+    <nav>
+      <a class="active" href="/admin">Hub</a>
+      <a href="/admin/tests">Testes</a>
+      <a href="/admin/users">Testadores</a>
+      <a href="/admin/metrics">Métricas</a>
+    </nav>
+  </aside>
+
+  <div class="main-content">
+    
+    <header class="top-header">
+      <nav class="top-actions">
+        <span>Administrador</span>
+        <button id="btnLogout" class="btn danger">Sair</button>
+      </nav>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <h1 class="section-title">Bem-vindo(a), Admin</h1>
+        <p class="muted">Escolha uma área no menu lateral para gerenciar o sistema.</p>
+      </section>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script>document.getElementById('btnLogout').onclick=()=>{localStorage.removeItem('tm_user');location.href='/';}</script>
+</body>
+</html>

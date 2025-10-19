@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin • Métricas</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body id="page-admin-metrics">
+  
+  <aside class="sidebar">
+    <div class="brand-wrap">
+      <img src="{{ url_for('static', filename='logoge.png') }}" alt="GE" class="brand-logo">
+      <div class="brand">Test Manager SAP</div>
+    </div>
+    <nav>
+      <a href="/admin">Hub</a>
+      <a href="/admin/tests">Testes</a>
+      <a href="/admin/users">Testadores</a>
+      <a class="active" href="/admin/metrics">Métricas</a>
+    </nav>
+  </aside>
+
+  <div class="main-content">
+    
+    <header class="top-header">
+      <nav class="top-actions">
+        <span>Administrador</span>
+        <button id="btnLogout" class="btn danger">Sair</button>
+      </nav>
+    </header>
+
+    <main class="container grid">
+      <section class="card">
+        <h2 class="section-title">KPIs gerais</h2>
+        <div class="kpi"><span>Taxa geral de sucesso:</span> <strong id="overallSuccess">0%</strong></div>
+        <div id="chartOverall" class="chart-bar"></div>
+        <button id="btnRefreshMetrics" class="btn">Atualizar métricas</button>
+      </section>
+
+      <section class="card">
+        <h2 class="section-title">Por teste</h2>
+        <div id="metricsByTest" class="table-wrap"></div>
+        <div id="chartTests" class="chart-list"></div>
+      </section>
+
+      <section class="card">
+        <h2 class="section-title">Por usuário</h2>
+        <div id="metricsByUser" class="table-wrap"></div>
+        <div id="chartUsers" class="chart-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
