@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Login • Test Manager SAP (DEMO)</title>
+  <title>Login • Test Manager ERP (DEMO)</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -10,7 +10,7 @@
   <header class="topbar">
     <div class="brand-wrap">
       <img src="{{ url_for('static', filename='logoge.png') }}" alt="GE" class="brand-logo">
-      <div class="brand">Test Manager SAP</div>
+      <div class="brand">Test Manager ERP</div>
     </div>
   </header>
 
@@ -21,7 +21,10 @@
 
       <div class="info-block">
         <div><strong>Admin:</strong> <code>adm123</code> / <code>adm123</code></div>
-        <div><strong>Testador:</strong> <code>usertest</code> / <code>adm123</code></div>
+        <div><strong>Testadores:</strong> 
+          <code>igor</code>, <code>isaque</code>, <code>luiz</code>, <code>kevin</code>, <code>diego</code> / 
+          <code>adm123</code>
+      </div>
       </div>
 
       <form id="loginForm" class="form-grid">
@@ -34,12 +37,12 @@
           <input type="password" id="password" placeholder="ex.: adm123" required />
         </div>
         
-        <div class="actions">
+        <div class="actions" style="grid-column:1/-1;">
           <button type="submit" class="btn primary">Entrar</button>
         </div>
       </form>
 
-      <p class="footnote">Identidade visual baseada em GE Aerospace • Demo sem persistência</p>
+      <p class="footnote"></p>
     </section>
   </main>
 

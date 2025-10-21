@@ -1,369 +1,439 @@
-from flask import Flask, request, jsonify, render_template
-from flask_cors import CORS
-import time
-import random
+from flask import Flask, request, jsonify, render_template, send_from_directory
+from datetime import datetime
+from copy import deepcopy
 
-systems = [
-    {'id': 1, 'name': 'SAP', 'modules': ['FI', 'MM', 'SD', 'PP', 'QM']}
-]
+app = Flask(__name__)
+
+# =========================
+# Helpers 
+# =========================
+
+def _now_iso():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def _norm_username(u: str) -> str:
+    return (u or "").strip().lower()
+
+def _find_user(users_list, username):
+    nu = _norm_username(username)
+    return next((u for u in users_list if _norm_username(u.get("username")) == nu), None)
+
+def _next_test_id():
+    global _TEST_SEQ
+    _TEST_SEQ += 1
+    return _TEST_SEQ
+
+def _require_headers():
+    user = (request.headers.get("X-User") or "").strip()
+    role = (request.headers.get("X-Role") or "").strip()
+    if not user or not role:
+        return None, None, ("Acesso negado (sessão ausente).", 403)
+    return user, role, None
+
+def _require_admin():
+    u, r, err = _require_headers()
+    if err: return err
+    if r != "admin": return ("Acesso restrito a administradores.", 403)
+    return None
+
+def _require_tester():
+    u, r, err = _require_headers()
+    if err: return err
+    if r not in ("tester", "admin"): return ("Acesso restrito a testadores.", 403)
+    return None
+
+# =========================
+# Mock data 
+# =========================
 
 users = [
-    {'username': 'adm123', 'password': 'adm123', 'role': 'admin', 'active': True},
-    {'username': 'usertest', 'password': 'adm123', 'role': 'tester', 'active': True}
+    {"username":"adm123","name":"Administrador","email":"admin@example.com","credential":"admin","department":"QA","birth_date":"","active":True,"role":"admin"},
+    {"username":"igor","name":"Igor Tester","email":"igor@example.com","credential":"tester","department":"QA","birth_date":"","active":True,"role":"tester"},
+    {"username":"isaque","name":"Isaque Tester","email":"isaque@example.com","credential":"tester","department":"QA","birth_date":"","active":True,"role":"tester"},
+    {"username":"luiz","name":"Luiz Tester","email":"luiz@example.com","credential":"tester","department":"QA","birth_date":"","active":True,"role":"tester"},
+    {"username":"kevin","name":"Kevin Tester","email":"kevin@example.com","credential":"tester","department":"QA","birth_date":"","active":True,"role":"tester"},
+    {"username":"diego","name":"Diego Tester","email":"diego@example.com","credential":"tester","department":"QA","birth_date":"","active":True,"role":"tester"},
+]
+
+# senha mock: "adm123" para todos
+MOCK_PASSWORD = "adm123"
+
+systems = [
+    {
+        "id": 1,
+        "name": "SAP ECC",
+        "modules": ["MM", "SD", "FI", "CO", "PP"]
+    }
 ]
 
 test_templates = {
-    'FI': [
-        {'code': 'FI001', 'name': 'Lançamento de Nota Fiscal de Entrada', 'desc': 'Verifica a criação correta de documento contábil para NF-e.', 'category': 'Transação'},
-        {'code': 'FI002', 'name': 'Compensação de Contas a Pagar (F-53)', 'desc': 'Valida a conciliação entre pagamento e obrigação pendente.', 'category': 'Processo'},
-        {'code': 'FI003', 'name': 'Relatório de Balanço (F.01)', 'desc': 'Geração e validação do balanço patrimonial e DRE.', 'category': 'Relatório'},
-        {'code': 'FI004', 'name': 'Fechamento Mensal/Anual (ECC)', 'desc': 'Execução do ciclo de fechamento contábil e fiscal.', 'category': 'Processo'},
+    "MM": [
+        {"code":"MM-001","name":"Entrada de NF","category":"Sanity","desc":"Validação de entrada de nota fiscal"},
+        {"code":"MM-010","name":"Pedido de compra","category":"Core","desc":"Criação e liberação de pedido"}
     ],
-    'MM': [
-        {'code': 'MM001', 'name': 'Criação de Pedido de Compra (ME21N)', 'desc': 'Teste completo do fluxo de criação e aprovação do PC.', 'category': 'Transação'},
-        {'code': 'MM002', 'name': 'Entrada de Mercadoria (MIGO)', 'desc': 'Verifica o recebimento físico e o impacto contábil.', 'category': 'Transação'},
-        {'code': 'MM003', 'name': 'Configuração de Preços (Condições)', 'desc': 'Validação de preços, descontos e impostos em compras.', 'category': 'Configuração'},
-        {'code': 'MM004', 'name': 'Inventário Físico', 'desc': 'Processo completo de contagem e ajuste de estoque.', 'category': 'Processo'},
+    "SD": [
+        {"code":"SD-002","name":"Ordem de venda","category":"Core","desc":"Criação e faturamento"},
+        {"code":"SD-011","name":"Entrega","category":"Sanity","desc":"Picking, packing e PGI"}
     ],
-    'SD': [
-        {'code': 'SD001', 'name': 'Criação de Pedido de Venda', 'desc': 'Teste do ciclo completo da ordem de venda.', 'category': 'Transação'},
-        {'code': 'SD002', 'name': 'Cálculo de Imposto (Tax)', 'desc': 'Verifica a correta aplicação das regras de impostos na fatura.', 'category': 'Configuração'},
-        {'code': 'SD003', 'name': 'Entrega e Saída de Mercadoria', 'desc': 'Fluxo de logística de vendas e impacto no estoque.', 'category': 'Transação'},
-        {'code': 'SD004', 'name': 'Processamento de Devoluções (Retorno)', 'desc': 'Simulação de um ciclo de devolução de produtos por cliente.', 'category': 'Processo'},
+    "FI": [
+        {"code":"FI-005","name":"Baixa de título","category":"Core","desc":"Liquidação de títulos a receber"}
     ],
-    'PP': [ 
-        {'code': 'PP001', 'name': 'Criação de Ordem de Produção', 'desc': 'Verifica a criação e liberação de uma ordem de produção.', 'category': 'Transação'},
-        {'code': 'PP002', 'name': 'Apontamento de Tempos (Confirm.)', 'desc': 'Confirmação das etapas da ordem e consumo de insumos.', 'category': 'Processo'},
-        {'code': 'PP003', 'name': 'Cálculo de Necessidades (MRP)', 'desc': 'Execução do MRP e verificação da criação de requisições.', 'category': 'Processo'},
-        {'code': 'PP004', 'name': 'Custos de Produção (Custeio)', 'desc': 'Validação do custo do produto e encerramento da ordem.', 'category': 'Configuração'},
+    "CO": [
+        {"code":"CO-003","name":"Centro de custo","category":"Sanity","desc":"Cadastro e rateio"}
     ],
-    'QM': [ 
-        {'code': 'QM001', 'name': 'Registro de Lote de Inspeção', 'desc': 'Criação automática ou manual de um lote para inspeção.', 'category': 'Processo'},
-        {'code': 'QM002', 'name': 'Registro de Resultados', 'desc': 'Inserção de resultados de medição e aprovação do lote.', 'category': 'Transação'},
-        {'code': 'QM003', 'name': 'Liberação de Uso/Rejeição', 'desc': 'Decisão de uso (aceite) ou rejeição do material.', 'category': 'Processo'},
-        {'code': 'QM004', 'name': 'Certificado de Qualidade', 'desc': 'Geração do Certificado de Análise (CoA) para clientes.', 'category': 'Relatório'},
-    ],
-    'CORE': [ 
-        {'code': 'CORE01', 'name': 'Login/Logout com Bloqueio', 'desc': 'Verifica bloqueio de usuário após N tentativas.', 'category': 'Segurança'},
-        {'code': 'CORE02', 'name': 'Performance de Carga (Home)', 'desc': 'Mede o tempo de carregamento do Dashboard inicial.', 'category': 'Performance'},
-        {'code': 'CORE03', 'name': 'Controle de Acessos (Roles)', 'desc': 'Valida permissões de usuário (transações e objetos).', 'category': 'Segurança'},
-        {'code': 'CORE04', 'name': 'Backup de Dados Críticos', 'desc': 'Simulação de recuperação de dados e integridade.', 'category': 'Infraestrutura'},
+    "PP": [
+        {"code":"PP-007","name":"Ordem produção","category":"Core","desc":"CRP e confirmação"}
     ]
 }
 
-tests = []
-test_results = []
-user_logs = []
+tests = [
+    # exemplo inicial
+    {"id":1, "name":"Sanity MM", "description":"Smoke básico MM", "system_id":1, "module":"MM",
+     "tokens":"MM-001,MM-010","project":"Global","cycles_qty":1,"active":True},
+    {"id":2, "name":"Fluxo SD", "description":"Venda->Entrega->Faturamento", "system_id":1, "module":"SD",
+     "tokens":"SD-002,SD-011","project":"Global","cycles_qty":1,"active":True}
+]
+_TEST_SEQ = max([t["id"] for t in tests] or [0])
 
-MAX_USERS = 10
-MAX_TESTS = 15
+# Execuções (resultados)
+results = []  # cada item: {username, test_id, test_name, cycles, successes, failures, ts}
 
-app = Flask(__name__, static_folder='static', template_folder='templates')
-CORS(app)
+# Logs simples por usuário
+user_logs = []  # {username, event, ts}
 
-def now_ts(): return int(time.time())
 
-def find_user(username):
-    return next((u for u in users if u['username'] == username), None)
+# =========================
+# Páginas (templates)
+# =========================
 
-def next_test_id():
-    return (max([t['id'] for t in tests]) + 1) if tests else 1
+@app.route("/")
+def page_login():
+    return render_template("login.html")
 
-def get_system(sys_id):
-    return next((s for s in systems if s['id'] == sys_id), None)
+@app.route("/admin")
+def admin_hub():
+    return render_template("admin-dashboard.html")
 
-def header_identity():
-    return request.headers.get('X-User'), request.headers.get('X-Role')
+@app.route("/admin/tests")
+def admin_tests_page():
+    return render_template("admin-tests.html")
 
-def require_admin():
-    u, r = header_identity()
-    return (u, r) if r == 'admin' else (None, None)
+@app.route("/admin/users")
+def admin_users_page():
+    return render_template("admin-users.html")
 
-@app.route('/')
-def page_login(): return render_template('login.html')
+@app.route("/admin/metrics")
+def admin_metrics_page():
+    return render_template("admin-metrics.html")
 
-@app.route('/admin')
-def page_admin_home(): return render_template('admin-dashboard.html')
+@app.route("/tester-dashboard.html")
+def tester_dashboard_page():
+    return render_template("tester-dashboard.html")
 
-@app.route('/admin/tests')
-def page_admin_tests(): return render_template('admin-tests.html')
 
-@app.route('/admin/users')
-def page_admin_users(): return render_template('admin-users.html')
+# =========================
+# API: Autenticação
+# =========================
 
-@app.route('/admin/metrics')
-def page_admin_metrics(): return render_template('admin-metrics.html')
-
-@app.route('/tester-dashboard.html') 
-def page_tester_dashboard(): return render_template('tester-dashboard.html')
-
-@app.post('/api/login')
+@app.route("/api/login", methods=["POST"])
 def api_login():
-    data = request.get_json(force=True)
-    username = (data.get('username') or '').strip()
-    password = (data.get('password') or '').strip()
+    data = request.get_json(silent=True) or {}
+    lu = _norm_username(data.get("username",""))
+    pw = data.get("password","")
+    user = next((u for u in users if _norm_username(u.get("username")) == lu), None)
+    if not user or pw != MOCK_PASSWORD or not user.get("active", True):
+        return jsonify(ok=False, message="Credenciais inválidas."), 401
+    # mock de log
+    user_logs.append({"username": user["username"], "event": "login", "ts": _now_iso()})
+    return jsonify(ok=True, username=user["username"], role=user["role"])
 
-    u = find_user(username)
-    if not u or u['password'] != password or not u.get('active', True):
-        return jsonify({'ok': False, 'message': 'Usuário/senha inválidos ou usuário inativo.'}), 401
 
-    user_logs.append({'username': username, 'event': 'login', 'ts': now_ts()})
-    return jsonify({'ok': True, 'username': u['username'], 'role': u['role']}), 200
+# =========================
+# API: Sistemas / Templates
+# =========================
 
-@app.get('/api/check-session')
-def api_check_session():
-    username = request.args.get('username', '').strip()
-    u = find_user(username)
-    if not u:
-        return jsonify({'ok': False}), 401
-    return jsonify({'ok': True, 'username': u['username'], 'role': u['role'], 'active': u.get('active', True)}), 200
-
-@app.get('/api/systems')
+@app.route("/api/systems")
 def api_systems():
-    return jsonify({'ok': True, 'systems': systems}), 200
+    err = _require_headers()[2]
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    return jsonify(ok=True, systems=systems)
 
-@app.get('/api/admin/tests')
-def admin_list_tests():
-    user, role = header_identity()
-    if role != 'admin': return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-    ordered = sorted(tests, key=lambda t: t.get('priority', 0))
-    return jsonify({'ok': True, 'tests': ordered, 'systems': systems}), 200
+@app.route("/api/test-templates")
+def api_templates():
+    err = _require_headers()[2]
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    module = (request.args.get("module") or "").strip()
+    return jsonify(ok=True, templates=test_templates.get(module, []))
 
-@app.post('/api/admin/tests')
-def admin_create_test():
-    user, role = require_admin()
-    if not role: return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-    if len(tests) >= MAX_TESTS:
-        return jsonify({'ok': False, 'message': 'Limite de 15 testes atingido (demo).'}), 400
 
-    data = request.get_json(force=True)
-    name = (data.get('name') or '').strip()
-    description = (data.get('description') or '').strip()
-    system_id = int(data.get('system_id') or 1)
-    module = (data.get('module') or '').strip()
+# =========================
+# API: Admin - Tests
+# =========================
 
-    if not name: return jsonify({'ok': False, 'message': 'Nome é obrigatório.'}), 400
-    if not get_system(system_id): return jsonify({'ok': False, 'message': 'Sistema inválido.'}), 400
+@app.route("/api/admin/tests", methods=["GET"])
+def api_admin_tests_get():
+    err = _require_admin()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    # devolve na ordem atual (lista já reflete ordem)
+    return jsonify(ok=True, tests=tests)
 
-    priority = len(tests) + 1
-    new_test = {
-        'id': next_test_id(), 'name': name, 'description': description,
-        'system_id': system_id, 'module': module, 'active': True,
-        'priority': priority, 'created_by': user or 'adm123'
+@app.route("/api/admin/tests", methods=["POST"])
+def api_admin_tests_create():
+    err = _require_admin()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    system_id = data.get("system_id")
+    module = (data.get("module") or "").strip()
+    if not name or not system_id or not module:
+        return jsonify(ok=False, message="Nome, Sistema e Módulo são obrigatórios."), 400
+    new_obj = {
+        "id": _next_test_id(),
+        "name": name,
+        "description": (data.get("description") or "").strip(),
+        "system_id": int(system_id),
+        "module": module,
+        "tokens": (data.get("tokens") or "").strip(),
+        "project": (data.get("project") or "Global").strip(),
+        "cycles_qty": int(data.get("cycles_qty") or 1),
+        "active": True
     }
-    tests.append(new_test)
-    return jsonify({'ok': True, 'test': new_test}), 201
+    tests.append(new_obj)
+    return jsonify(ok=True, test=new_obj), 201
 
-@app.post('/api/admin/tests/update')
-def admin_update_test():
-    user, role = require_admin()
-    if not role: return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
+@app.route("/api/admin/tests/update", methods=["POST"])
+def api_admin_tests_update():
+    err = _require_admin()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    data = request.get_json(silent=True) or {}
+    tid = data.get("id")
+    t = next((x for x in tests if x["id"] == tid), None)
+    if not t:
+        return jsonify(ok=False, message="Teste não encontrado."), 404
+    for k in ["name","description","module","tokens","project","cycles_qty","active","system_id"]:
+        if k in data and data[k] is not None:
+            if k in ["system_id","cycles_qty"]:
+                t[k] = int(data[k])
+            else:
+                t[k] = data[k] if isinstance(data[k], bool) else str(data[k]).strip()
+    return jsonify(ok=True, test=t)
 
-    data = request.get_json(force=True)
-    test_id = int(data.get('id') or 0)
-    t = next((x for x in tests if x['id'] == test_id), None)
-    if not t: return jsonify({'ok': False, 'message': 'Teste não encontrado.'}), 404
+@app.route("/api/admin/tests/delete", methods=["POST"])
+def api_admin_tests_delete():
+    err = _require_admin()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    data = request.get_json(silent=True) or {}
+    tid = data.get("id")
+    idx = next((i for i,x in enumerate(tests) if x["id"] == tid), None)
+    if idx is None:
+        return jsonify(ok=False, message="Teste não encontrado."), 404
+    tests.pop(idx)
+    # opcional: remover resultados do teste
+    global results
+    results = [r for r in results if r.get("test_id") != tid]
+    return jsonify(ok=True)
 
-    for key in ['name', 'description', 'module']:
-        if key in data: t[key] = (data.get(key) or '').strip()
-    if 'system_id' in data:
-        sys_id = int(data.get('system_id') or 1)
-        if not get_system(sys_id):
-            return jsonify({'ok': False, 'message': 'Sistema inválido.'}), 400
-        t['system_id'] = sys_id
-    if 'active' in data: t['active'] = bool(data.get('active'))
+@app.route("/api/admin/tests/reorder", methods=["POST"])
+def api_admin_tests_reorder():
+    err = _require_admin()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    data = request.get_json(silent=True) or {}
+    ordered_ids = data.get("ordered_ids") or []
+    if len(ordered_ids) != len(tests):
+        return jsonify(ok=False, message="Lista de IDs incompleta."), 400
+    id_to_test = {t["id"]: t for t in tests}
+    try:
+        new_list = [id_to_test[i] for i in ordered_ids]
+    except KeyError:
+        return jsonify(ok=False, message="IDs inválidos."), 400
+    tests.clear()
+    tests.extend(new_list)
+    return jsonify(ok=True)
 
-    return jsonify({'ok': True, 'test': t}), 200
 
-@app.post('/api/admin/tests/delete')
-def admin_delete_test():
-    user, role = require_admin()
-    if not role: return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-    data = request.get_json(force=True)
-    test_id = int(data.get('id') or 0)
-    global tests, test_results
-    if not any(t['id'] == test_id for t in tests):
-        return jsonify({'ok': False, 'message': 'Teste não encontrado.'}), 404
-    tests = [t for t in tests if t['id'] != test_id]
-    test_results = [r for r in test_results if r['test_id'] != test_id]
-    for i, t in enumerate(sorted(tests, key=lambda x: x.get('priority', 0)), start=1):
-        t['priority'] = i
-    return jsonify({'ok': True}), 200
+# =========================
+# API: Admin - Users (username único seguro)
+# =========================
 
-@app.post('/api/admin/tests/reorder')
-def admin_reorder_tests():
-    user, role = require_admin()
-    if not role: return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-    data = request.get_json(force=True)
-    order = data.get('order') or []
-    priority_map = {tid: i+1 for i, tid in enumerate(order)}
-    for t in tests:
-        if t['id'] in priority_map:
-            t['priority'] = priority_map[t['id']]
-    tests.sort(key=lambda x: x.get('priority', 0))
-    return jsonify({'ok': True, 'tests': tests}), 200
+@app.route("/api/admin/users", methods=["GET"])
+def api_admin_users_get():
+    err = _require_admin()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    return jsonify(ok=True, users=users)
 
-@app.get('/api/admin/users')
-def admin_list_users():
-    user, role = header_identity()
-    if role != 'admin': return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-    testers = [u for u in users if u['role'] == 'tester']
-    return jsonify({'ok': True, 'users': testers}), 200
+@app.route("/api/admin/users", methods=["POST"])
+def api_admin_users_create():
+    err = _require_admin()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    if not username:
+        return jsonify(ok=False, message="Username é obrigatório."), 400
+    if _find_user(users, username) is not None:
+        return jsonify(ok=False, message="Username já existente."), 409
+    new_user = {
+        "username": username,
+        "name": (data.get("name") or "").strip(),
+        "email": (data.get("email") or "").strip(),
+        "credential": (data.get("credential") or "").strip(),
+        "department": (data.get("department") or "").strip(),
+        "birth_date": (data.get("birth_date") or "").strip(),
+        "active": True,
+        "role": "tester"
+    }
+    users.append(new_user)
+    return jsonify(ok=True, user=new_user), 201
 
-@app.post('/api/admin/users')
-def admin_create_user():
-    user, role = require_admin()
-    if not role: return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-    if len(users) >= MAX_USERS:
-        return jsonify({'ok': False, 'message': 'Limite de 10 usuários (demo).'}), 400
+@app.route("/api/admin/users/update", methods=["POST"])
+def api_admin_users_update():
+    err = _require_admin()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    user = _find_user(users, username)
+    if user is None:
+        return jsonify(ok=False, message="Usuário não encontrado."), 404
 
-    data = request.get_json(force=True)
-    username = (data.get('username') or '').strip()
-    if not username: return jsonify({'ok': False, 'message': 'Username obrigatório.'}), 400
-    if find_user(username): return jsonify({'ok': False, 'message': 'Usuário já existe.'}), 400
+    new_username = data.get("new_username")
+    if new_username:
+        if _find_user(users, new_username) and _norm_username(new_username) != _norm_username(username):
+            return jsonify(ok=False, message="Username já existente."), 409
+        user["username"] = new_username.strip()
 
-    users.append({'username': username, 'password': 'adm123', 'role': 'tester', 'active': True})
-    testers = [u for u in users if u['role'] == 'tester']
-    return jsonify({'ok': True, 'users': testers}), 201
+    for field in ["name","email","credential","department","birth_date","active"]:
+        if field in data:
+            user[field] = data[field]
+    return jsonify(ok=True, user=user)
 
-@app.post('/api/admin/users/update')
-def admin_update_user():
-    user, role = require_admin()
-    if not role: return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-    data = request.get_json(force=True)
-    username = (data.get('username') or '').strip()
-    u = find_user(username)
-    if not u or u['role'] != 'tester':
-        return jsonify({'ok': False, 'message': 'Usuário não encontrado.'}), 404
+@app.route("/api/admin/users/delete", methods=["POST"])
+def api_admin_users_delete():
+    err = _require_admin()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    idx = next((i for i,u in enumerate(users) if _norm_username(u["username"]) == _norm_username(username)), None)
+    if idx is None:
+        return jsonify(ok=False, message="Usuário não encontrado."), 404
+    users.pop(idx)
+    return jsonify(ok=True)
 
-    if 'new_username' in data:
-        new_username = (data.get('new_username') or '').strip()
-        if not new_username: return jsonify({'ok': False, 'message': 'Novo username inválido.'}), 400
-        if find_user(new_username) and new_username != username:
-            return jsonify({'ok': False, 'message': 'Novo username já existe.'}), 400
-        for r in test_results:
-            if r['username'] == username: r['username'] = new_username
-        for lg in user_logs:
-            if lg['username'] == username: lg['username'] = new_username
-        u['username'] = new_username
+@app.route("/api/admin/users/logs")
+def api_admin_users_logs():
+    err = _require_admin()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    username = (request.args.get("username") or "").strip()
+    logs = [l for l in user_logs if _norm_username(l["username"]) == _norm_username(username)]
+    return jsonify(ok=True, logs=logs, login_count=len([x for x in logs if x["event"]=="login"]))
 
-    if 'active' in data:
-        u['active'] = bool(data.get('active'))
 
-    return jsonify({'ok': True, 'user': u}), 200
+# =========================
+# API: Admin - Métricas
+# =========================
 
-@app.post('/api/admin/users/delete')
-def admin_delete_user():
-    user, role = require_admin()
-    if not role: return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-    data = request.get_json(force=True)
-    username = (data.get('username') or '').strip()
-    u = find_user(username)
-    if not u or u['role'] != 'tester':
-        return jsonify({'ok': False, 'message': 'Usuário não encontrado.'}), 404
-    global users, test_results, user_logs
-    users = [x for x in users if x['username'] != username]
-    test_results = [r for r in test_results if r['username'] != username]
-    user_logs = [l for l in user_logs if l['username'] != username]
-    return jsonify({'ok': True}), 200
+@app.route("/api/admin/metrics")
+def api_admin_metrics():
+    err = _require_admin()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
 
-@app.get('/api/admin/users/logs')
-def admin_user_logs():
-    user, role = header_identity()
-    if role != 'admin': return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-    username = request.args.get('username')
-    logs = [l for l in user_logs if (not username or l['username'] == username)]
-    logs.sort(key=lambda x: x['ts'], reverse=True)
-    return jsonify({'ok': True, 'logs': logs[:200]}), 200
-
-@app.get('/api/tester/tests')
-def tester_list_tests():
-    u, role = header_identity()
-    if role not in ('tester', 'admin'): return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-    active_tests = [t for t in tests if t['active']]
-    active_tests.sort(key=lambda x: x.get('priority', 0))
-    return jsonify({'ok': True, 'tests': active_tests}), 200
-
-@app.get('/api/test-templates')
-def api_test_templates():
-    """Retorna os testes modelos disponíveis para seleção por módulo."""
-    module = request.args.get('module')
-    if module == 'CORE':
-        templates = test_templates.get('CORE', [])
-    elif module:
-        templates = test_templates.get(module, [])
-    else:
-        # Se nenhum módulo for fornecido, retorna todos (útil para o sistema)
-        templates = []
-        for mod, tests in test_templates.items():
-            templates.extend(tests)
-            
-    return jsonify({'ok': True, 'templates': templates}), 200
-
-@app.post('/api/tester/execute')
-def tester_execute():
-    u, role = header_identity()
-    if role not in ('tester', 'admin'): return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-
-    data = request.get_json(force=True)
-    test_id = int(data.get('test_id') or 0)
-    cycles = max(1, min(5, int(data.get('cycles') or 1)))
-
-    t = next((x for x in tests if x['id'] == test_id and x['active']), None)
-    if not t: return jsonify({'ok': False, 'message': 'Teste não encontrado/inativo.'}), 404
-
-    successes = sum(1 for _ in range(cycles) if random.random() < 0.8)
-    failures = cycles - successes
-    result = {'test_id': t['id'], 'test_name': t['name'], 'username': u,
-              'cycles': cycles, 'successes': successes, 'failures': failures, 'ts': now_ts()}
-    test_results.append(result)
-
-    my_runs = [r for r in test_results if r['username'] == u]
-    my_cycles = sum(r['cycles'] for r in my_runs)
-    my_success = sum(r['successes'] for r in my_runs)
-    my_rate = round((my_success / my_cycles) * 100, 1) if my_cycles else 0.0
-
-    return jsonify({'ok': True, 'result': result, 'my_success_rate': my_rate}), 201
-
-@app.get('/api/tester/results')
-def tester_results():
-    u, role = header_identity()
-    if role not in ('tester', 'admin'): return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-    my_runs = [r for r in test_results if r['username'] == u]
-    my_cycles = sum(r['cycles'] for r in my_runs)
-    my_success = sum(r['successes'] for r in my_runs)
-    my_rate = round((my_success / my_cycles) * 100, 1) if my_cycles else 0.0
-    return jsonify({'ok': True, 'results': my_runs, 'my_success_rate': my_rate}), 200
-
-@app.get('/api/admin/metrics')
-def admin_metrics():
-    u, role = header_identity()
-    if role != 'admin': return jsonify({'ok': False, 'message': 'Acesso negado'}), 403
-
+    # por teste
     per_test = []
     for t in tests:
-        runs = [r for r in test_results if r['test_id'] == t['id']]
-        total_cycles = sum(r['cycles'] for r in runs)
-        total_success = sum(r['successes'] for r in runs)
-        rate = round((total_success / total_cycles) * 100, 1) if total_cycles else 0.0
+        rs = [r for r in results if r["test_id"] == t["id"]]
+        total_runs = len(rs)
+        total_cycles = sum(r["cycles"] for r in rs) if rs else 0
+        succ = sum(r["successes"] for r in rs) if rs else 0
+        fail = sum(r["failures"] for r in rs) if rs else 0
+        rate = round((succ / (succ + fail) * 100), 1) if (succ + fail) else 0
         per_test.append({
-            'test_id': t['id'], 'test_name': t['name'], 'module': t.get('module') or '-',
-            'total_runs': len(runs), 'total_cycles': total_cycles, 'success_rate': rate
+            "test_name": t["name"], "module": t["module"], "project": t["project"],
+            "total_runs": total_runs, "total_cycles": total_cycles, "success_rate": rate
         })
 
+    # por usuário
     per_user = []
-    for un in [x['username'] for x in users if x['role'] == 'tester']:
-        runs = [r for r in test_results if r['username'] == un]
-        total_cycles = sum(r['cycles'] for r in runs)
-        total_success = sum(r['successes'] for r in runs)
-        rate = round((total_success / total_cycles) * 100, 1) if total_cycles else 0.0
-        per_user.append({'username': un, 'runs': len(runs), 'total_cycles': total_cycles, 'success_rate': rate})
+    by_user = {}
+    for r in results:
+        u = r["username"]
+        by_user.setdefault(u, {"runs":0,"total_cycles":0,"succ":0,"fail":0})
+        by_user[u]["runs"] += 1
+        by_user[u]["total_cycles"] += r["cycles"]
+        by_user[u]["succ"] += r["successes"]
+        by_user[u]["fail"] += r["failures"]
+    for u, ag in by_user.items():
+        rate = round((ag["succ"] / (ag["succ"] + ag["fail"]) * 100), 1) if (ag["succ"] + ag["fail"]) else 0
+        per_user.append({"username": u, "runs": ag["runs"], "total_cycles": ag["total_cycles"], "success_rate": rate})
 
-    all_cycles = sum(r['cycles'] for r in test_results)
-    all_success = sum(r['successes'] for r in test_results)
-    overall = round((all_success / all_cycles) * 100, 1) if all_cycles else 0.0
+    # geral
+    total_succ = sum(r["successes"] for r in results) or 0
+    total_fail = sum(r["failures"] for r in results) or 0
+    overall = round((total_succ / (total_succ + total_fail) * 100), 1) if (total_succ + total_fail) else 0
 
-    return jsonify({'ok': True, 'per_test': per_test, 'per_user': per_user, 'overall_success': overall}), 200
+    return jsonify(ok=True, per_test=per_test, per_user=per_user, overall_success_rate=overall)
 
-if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+
+# =========================
+# API: Tester
+# =========================
+
+@app.route("/api/tester/tests")
+def api_tester_tests():
+    err = _require_tester()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    active_tests = [t for t in tests if t.get("active")]
+    return jsonify(ok=True, tests=active_tests)
+
+@app.route("/api/tester/execute", methods=["POST"])
+def api_tester_execute():
+    user, role, err = _require_headers()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    if role not in ("tester","admin"):
+        return jsonify(ok=False, message="Acesso restrito a testadores."), 403
+
+    data = request.get_json(silent=True) or {}
+    tid = data.get("id")
+    cycles = int(data.get("cycles") or 1)
+    t = next((x for x in tests if x["id"] == tid and x.get("active")), None)
+    if not t:
+        return jsonify(ok=False, message="Teste não encontrado/ativo."), 404
+
+    # Simulação simples: 70% de sucesso por ciclo
+    successes = 0
+    failures = 0
+    import random
+    for _ in range(cycles):
+        successes += 1 if random.random() < 0.7 else 0
+    failures = cycles - successes
+
+    results.append({
+        "username": user, "test_id": t["id"], "test_name": t["name"],
+        "cycles": cycles, "successes": successes, "failures": failures, "ts": _now_iso()
+    })
+    return jsonify(ok=True)
+
+@app.route("/api/tester/results")
+def api_tester_results():
+    user, role, err = _require_headers()
+    if err: return jsonify(ok=False, message=err[0]), err[1]
+    my = [r for r in results if _norm_username(r["username"]) == _norm_username(user)]
+    succ = sum(r["successes"] for r in my)
+    fail = sum(r["failures"] for r in my)
+    rate = round((succ / (succ + fail) * 100), 1) if (succ + fail) else 0
+    return jsonify(ok=True, results=my, my_success_rate=rate)
+
+
+# =========================
+# Static pass-through (se servir por Flask)
+# =========================
+
+@app.route("/static/<path:filename>")
+def static_files(filename):
+    return send_from_directory("static", filename)
+
+
+# =========================
+# Dev runner
+# =========================
+
+if __name__ == "__main__":
+    # debug=True apenas em dev
+    app.run(host="127.0.0.1", port=5000, debug=True)

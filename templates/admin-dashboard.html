@@ -11,7 +11,7 @@
   <aside class="sidebar">
     <div class="brand-wrap">
       <img src="{{ url_for('static', filename='logoge.png') }}" alt="GE" class="brand-logo">
-      <div class="brand">Test Manager SAP</div>
+      <div class="brand">Test Manager</div>
     </div>
     <nav>
       <a class="active" href="/admin">Hub</a>
@@ -39,6 +39,6 @@
   </div>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
-  <script>document.getElementById('btnLogout').onclick=()=>{localStorage.removeItem('tm_user');location.href='/';}</script>
+  <script>document.addEventListener("DOMContentLoaded", initAdminHub);</script>
 </body>
 </html>

@@ -11,7 +11,7 @@
   <aside class="sidebar">
     <div class="brand-wrap">
       <img src="{{ url_for('static', filename='logoge.png') }}" alt="GE" class="brand-logo">
-      <div class="brand">Test Manager SAP</div>
+      <div class="brand">Test Manager</div>
     </div>
     <nav>
       <a href="/admin">Hub</a>
@@ -53,5 +53,6 @@
   </div>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script>document.addEventListener("DOMContentLoaded", initAdminMetrics);</script>
 </body>
 </html>

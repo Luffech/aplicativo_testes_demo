@@ -32,44 +32,66 @@
 
     <main class="container grid">
       <section class="card">
-        <h2 class="section-title">Gerenciar testadores</h2>
+        <h2 class="section-title">Cadastro e Edição de Testador</h2>
 
-        <div class="form-grid">
-          <div>
-            <label>Novo username</label>
-            <input type="text" id="u_new" placeholder="ex.: joaotester" />
+        <form id="userForm">
+          <input type="hidden" id="u_original_username" /> <h3 style="margin-top:20px;border-left:2px solid #1E3A8A;padding-left:8px;">Dados do Testador</h3>
+          
+          <div class="form-grid">
+            <div>
+              <label>Username (Credencial de Login)</label>
+              <input type="text" id="u_username" placeholder="ex.: joaotester" required />
+            </div>
+            <div>
+              <label>Nome Completo</label>
+              <input type="text" id="u_name" placeholder="ex.: João da Silva" />
+            </div>
+            <div>
+              <label>Email</label>
+              <input type="email" id="u_email" placeholder="email@empresa.com" />
+            </div>
+            <div>
+              <label>Credencial Empresa</label>
+              <input type="text" id="u_credential" placeholder="ex.: FI_01" />
+            </div>
+            <div>
+              <label>Departamento</label>
+              <input type="text" id="u_department" placeholder="ex.: Financeiro (FI)" />
+            </div>
+            <div>
+              <label>Data de Nascimento</label>
+              <input type="date" id="u_birth_date" />
+            </div>
           </div>
-        </div>
-        <div class="row">
-          <button id="btnAddUser" class="btn primary">Adicionar</button>
-        </div>
-
-        <hr style="border:none;border-top:1px solid #eef2f7;margin:16px 0" />
-
-        <div class="form-grid">
-          <div>
-            <label>Editar username (selecionado)</label>
-            <input type="text" id="u_edit" placeholder="novo username" />
+          
+          <div class="actions" style="grid-column:1/-1;justify-content:flex-start">
+            <button type="submit" id="btnSaveUser" class="btn primary">Salvar Novo Testador</button>
+            <button type="button" id="btnUpdateUser" class="btn" disabled>Atualizar Selecionado</button>
+            <button type="button" id="btnToggleUser" class="btn" disabled>Ativar/Desativar</button>
+            <button type="button" id="btnDeleteUser" class="btn danger" disabled>Excluir</button>
           </div>
+
+          <p class="hint">A senha padrão para todos os testadores é: <code>adm123</code></p>
+        </form>
+
+        <h2 class="section-title" style="margin-top:30px">Logs de Login (Usuário Selecionado)</h2>
+        <div id="userStats" class="kpi">
+            <span>Total de Logins:</span> <strong id="loginCount">0</strong>
         </div>
-        <div class="row">
-          <button id="btnUpdateUser" class="btn" disabled>Salvar alteração</button>
-          <button id="btnToggleUser" class="btn" disabled>Ativar/Desativar</button>
-          <button id="btnDeleteUser" class="btn danger" disabled>Excluir</button>
-        </div>
-        <p class="hint">Selecione um testador na tabela para editar, ativar/desativar ou excluir.</p>
+        <div id="userLogs" class="table-wrap"></div>
       </section>
 
       <section class="card">
-        <h2 class="section-title">Lista de testadores</h2>
+        <h2 class="section-title">Lista de Testadores Cadastrados</h2>
         <div id="usersList" class="table-wrap"></div>
-
-        <h2 class="section-title" style="margin-top:20px">Logs de login</h2>
-        <div id="userLogs" class="table-wrap"></div>
       </section>
     </main>
+
   </div>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", initAdminUsers);
+  </script>
 </body>
 </html>
